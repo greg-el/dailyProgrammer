@@ -1,6 +1,9 @@
 import sqlite3
 import praw
 import re
+import argparse
+
+
 
 class Challenges():
     def __init__(self):
@@ -28,12 +31,17 @@ reddit = praw.Reddit(client_id="5KuYf2bGxU1HHA",
 def initialDataDump():
     conn = sqlite3.connect("dailyProgrammer.db")
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS challenges (
+    c.execute('''CREATE TABLE challenges (
         code CHAR(6) PRIMARY KEY, 
         number int, 
         difficulty varchar(30), 
         task varchar(1), 
         complete int
+        )''')
+
+    c.execute('''CREATE TABLE current (
+        number int,
+        difficulty varchar(1)
         )''')
 
     pattern = re.compile(r"\[\d/\d{2}/\d{4}]")
@@ -46,7 +54,6 @@ def initialDataDump():
 
     for submission in reddit.subreddit("dailyprogrammer").new(limit=None):
         if pattern.match(submission.title) and challenge.findall(submission.title) or pattern2.match(submission.title) and challenge.findall(submission.title):
-            print(difficulty.search(submission.title.lower()))
             try:
                 difficultyEntry = difficulty.search(submission.title.lower()).group(1)
             except Exception:
@@ -60,8 +67,52 @@ def initialDataDump():
 def getChallengeByNumber(n):
     conn = sqlite3.connect("dailyProgrammer.db")
     c = conn.cursor()
-    c.execute('''SELECT number, difficulty FROM challenges WHERE number=?''', (n,))
-    print(c.fetchall())
+    lines = c.execute('''SELECT number, difficulty, task, complete FROM challenges WHERE number=?''', (n,))
+    challenges = Challenges()
+    for line in lines:
+        challenges = addChallengeToClass(challenges, line)
+    
+    out = challenges.returnList()
+    temp = {}
+    count = 0
+    for chall in out:
+        temp[count] = chall
+        print(f"{count}:  Task: {chall[0]} // Difficulty: {chall[1]} // Complete: {chall[3]}")
+        count+=1
+
+    selection = int(input("Select task: "))
+    for num, chall in temp.items():
+        if selection==num:
+            for entry in chall:
+                print(entry)
+            while True:
+                current = input("[s] - Set as the in-progress challenge // [b] - Return to the previous menu // [q] - Quit \n")
+                if current=="s":
+                    addCurrentToDatabase(chall)
+                elif current == "b":
+                    getChallengeByNumber(chall[0])
+                elif current == "q":
+                    exit(1)
+                else:
+                    print("Incorrect command. Try again.")
+
+
+    challenges.clear()
+
+def addCurrentToDatabase(challenge):
+    conn = sqlite3.connect("dailyProgrammer.db")
+    c = conn.cursor()
+    current = c.execute('''SELECT number, difficulty FROM current''')
+    currentFetch = current.fetchone()
+    if currentFetch[0] == challenge[0] and currentFetch[1] == challenge[1]:
+        print("This challenge is already the current one")
+        return
+    c.execute('''DELETE FROM current''')
+    c.execute('''INSERT INTO current VALUES (?, ?)''', (challenge[0], challenge[1]))
+    print(f"In-progress set as: {challenge[0]} [{challenge[1]}]")
+    conn.commit()
+    conn.close()
+
 
 
 def addChallengeToClass(challenges, line):
@@ -79,7 +130,7 @@ def addChallengeToClass(challenges, line):
 def getAllChallenges():
     conn = sqlite3.connect("dailyProgrammer.db")
     c = conn.cursor()
-    lines = c.execute('''SELECT number, difficulty FROM challenges''')
+    lines = c.execute('''SELECT number, difficulty FROM challenges LIMIT 1''')
     challengeNumber = lines.fetchone()[0]
     lines = c.execute('''SELECT number, difficulty FROM challenges''')
 
@@ -95,5 +146,14 @@ def getAllChallenges():
     
     conn.close()
 
+parser = argparse.ArgumentParser(description="Reddit dailyProgrammer client")
+parser.add_argument("integer", metavar='N', type=int, nargs='?', help="An integer for challenge selection")
+parser.add_argument("-c", "--challenge", help="Select challenge", dest="getNum", action="store_const", const=getChallengeByNumber)
+#parser.add_argument("-s", "--setCurrent", help="Set current challenge", dest="action", action="store_const", const=setCurrentChallenge)
+args = parser.parse_args()
+print(args)
 
-getAllChallenges()
+
+
+if args.getNum:
+    args.getNum(args.integer)
