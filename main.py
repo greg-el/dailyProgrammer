@@ -51,7 +51,7 @@ def initialDataDump():
     challenge = re.compile(r"Challenge")
     url = re.compile(r"comments\/(\w+)")
 
-
+    task = 0
     for submission in reddit.subreddit("dailyprogrammer").new(limit=None):
         if pattern.match(submission.title) and challenge.findall(submission.title) or pattern2.match(submission.title) and challenge.findall(submission.title):
             try:
@@ -99,6 +99,13 @@ def getChallengeByNumber(n):
 
     challenges.clear()
 
+def getChallengeByNumberAndDifficulty(n, diff):
+    conn = sqlite3.connect("dailyProgrammer.db")
+    c = conn.cursor()
+    current = c.execute('''SELECT number, difficulty, task, complete FROM challenges WHERE number=? AND difficulty=?''', (n, diff))
+    currentFetch = current.fetchone()
+    return(currentFetch[2])
+
 def addCurrentToDatabase(challenge):
     conn = sqlite3.connect("dailyProgrammer.db")
     c = conn.cursor()
@@ -113,6 +120,15 @@ def addCurrentToDatabase(challenge):
     conn.commit()
     conn.close()
 
+def getCurrentFromDatabase():
+    conn = sqlite3.connect("dailyProgrammer.db")
+    c = conn.cursor()
+    current = c.execute('''SELECT number, difficulty FROM current''')
+    currentFetch = current.fetchone()
+    print(getChallengeByNumberAndDifficulty(currentFetch[0], currentFetch[1]))
+
+    conn.commit()
+    conn.close()
 
 
 def addChallengeToClass(challenges, line):
@@ -149,11 +165,14 @@ def getAllChallenges():
 parser = argparse.ArgumentParser(description="Reddit dailyProgrammer client")
 parser.add_argument("integer", metavar='N', type=int, nargs='?', help="An integer for challenge selection")
 parser.add_argument("-c", "--challenge", help="Select challenge", dest="getNum", action="store_const", const=getChallengeByNumber)
+parser.add_argument("-p", "--in-progress", help="Show in-progress challenge", dest="getInProgress", action="store_const", const=getCurrentFromDatabase)
 #parser.add_argument("-s", "--setCurrent", help="Set current challenge", dest="action", action="store_const", const=setCurrentChallenge)
 args = parser.parse_args()
-print(args)
+#print(args)
 
 
 
 if args.getNum:
     args.getNum(args.integer)
+if args.getInProgress:
+    args.getInProgress()
