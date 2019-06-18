@@ -2,7 +2,7 @@ import sqlite3
 import praw
 import re
 import argparse
-
+import os
 
 
 class Challenges():
@@ -58,8 +58,9 @@ def initialDataDump():
                 difficultyEntry = difficulty.search(submission.title.lower()).group(1)
             except Exception:
                 difficultyEntry = difficulty.search(submission.title.lower()).group(0)
-            taskEntry = (url.search(submission.url).group(1), int(taskNumber.search(submission.title).group(0)[1:]), difficultyEntry, submission.selftext, 0)
+            taskEntry = (url.search(submission.url).group(1), task, difficultyEntry, submission.selftext, 0)
             c.execute('''INSERT INTO challenges VALUES (?,?,?,?,?)''', taskEntry)
+            task+=1
         
     conn.commit()
     conn.close()
@@ -73,28 +74,20 @@ def getChallengeByNumber(n):
         challenges = addChallengeToClass(challenges, line)
     
     out = challenges.returnList()
-    temp = {}
-    count = 0
+    os.system("clear")
     for chall in out:
-        temp[count] = chall
-        print(f"{count}:  Task: {chall[0]} // Difficulty: {chall[1]} // Complete: {chall[3]}")
-        count+=1
+        print(f"Task: {chall[0]} // Difficulty: {chall[1]} // Complete: {chall[3]} \n \n")
 
-    selection = int(input("Select task: "))
-    for num, chall in temp.items():
-        if selection==num:
-            for entry in chall:
-                print(entry)
-            while True:
-                current = input("[s] - Set as the in-progress challenge // [b] - Return to the previous menu // [q] - Quit \n")
-                if current=="s":
-                    addCurrentToDatabase(chall)
-                elif current == "b":
-                    getChallengeByNumber(chall[0])
-                elif current == "q":
-                    exit(1)
-                else:
-                    print("Incorrect command. Try again.")
+    print(chall[2])
+    while True:
+        current = input("[s] - Set as the in-progress challenge // [q] - Quit \n")
+        if current=="s":
+            addCurrentToDatabase(chall)
+        elif current == "q":
+            os.system("clear")
+            exit(1)
+        else:
+            print("Incorrect command. Try again.")
 
 
     challenges.clear()
@@ -155,7 +148,6 @@ def getAllChallenges():
         if line[0] == challengeNumber:
             challenges = addChallengeToClass(challenges, line)
         else:
-            print()
             challenges.clear()
             challengeNumber = line[0]
             challenges = addChallengeToClass(challenges, line)
@@ -169,7 +161,6 @@ parser.add_argument("-p", "--in-progress", help="Show in-progress challenge", de
 #parser.add_argument("-s", "--setCurrent", help="Set current challenge", dest="action", action="store_const", const=setCurrentChallenge)
 args = parser.parse_args()
 #print(args)
-
 
 
 if args.getNum:
