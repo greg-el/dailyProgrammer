@@ -4,63 +4,62 @@ import re
 import argparse
 import os
 
-
-class Challenges():
-    def __init__(self):
-        self.easy = None
-        self.intermediate = None
-        self.hard = None
-        self.other = None
-
-    def returnList(self):
-        out = [self.easy, self.intermediate, self.hard, self.other]
-        return [x for x in out if x != None]
-
-    def clear(self):
-        self.easy = None
-        self.intermediate = None
-        self.hard = None
-        self.other = None
-
-
 reddit = praw.Reddit(client_id="5KuYf2bGxU1HHA",
                     client_secret="kMMQi7d0lMyTd1jqw3Hx32NR4es",
                     user_agent="dailyProgrammer print to stdout - Kamoda")
+
+class Challenge():
+    def __init__(self, number, url, task, title, difficulty, complete, in_progress, *args, **kwargs):
+        self.number = number
+        self.difficulty = difficulty
+        self.task = task
+        self.title = title
+        self.url = url
+        self.complete = complete
+        self.in_progress = in_progress
+        
+    def returnDifficultyEqualLength(self):
+        return self.difficulty + " "*(24-(len(self.difficulty)))
+
+    def returnNumberEqualLength(self):
+        return str(self.number) + " "*(3-len(str(self.number)))
 
 
 def initialDataDump():
     conn = sqlite3.connect("dailyProgrammer.db")
     c = conn.cursor()
     c.execute('''CREATE TABLE challenges (
-        code CHAR(6) PRIMARY KEY, 
-        number int, 
+        number int PRIMARY KEY, 
         difficulty varchar(30), 
-        task varchar(1), 
-        complete int
+        task varchar(1),
+        title varchar(1),
+        url varchar(1),
+        complete int,
+        in_progress int
         )''')
 
-    c.execute('''CREATE TABLE current (
-        number int,
-        difficulty varchar(1)
-        )''')
+
 
     pattern = re.compile(r"\[\d/\d{2}/\d{4}]")
     pattern2 = re.compile(r"\[\d{4}-\d{2}-\d{2}]")
-    taskNumber = re.compile(r"# ?\d+| \d{2,3}")
+    #taskNumber = re.compile(r"# ?\d+| \d{2,3}")
     difficulty = re.compile(r"\[(\w*\/?\s?\w*)\]|intermediate|easy|hard")
     challenge = re.compile(r"Challenge")
-    url = re.compile(r"comments\/(\w+)")
+    #url = re.compile(r"comments\/(\w+)")
 
-    task = 0
+    number = 0
     for submission in reddit.subreddit("dailyprogrammer").new(limit=None):
         if pattern.match(submission.title) and challenge.findall(submission.title) or pattern2.match(submission.title) and challenge.findall(submission.title):
+            
             try:
                 difficultyEntry = difficulty.search(submission.title.lower()).group(1)
             except Exception:
                 difficultyEntry = difficulty.search(submission.title.lower()).group(0)
-            taskEntry = (url.search(submission.url).group(1), task, difficultyEntry, submission.selftext, 0)
-            c.execute('''INSERT INTO challenges VALUES (?,?,?,?,?)''', taskEntry)
-            task+=1
+            if difficultyEntry == None:
+                difficultyEntry = "other"
+            taskEntry = (number, difficultyEntry, submission.selftext, submission.title, submission.url,  0, 0)
+            c.execute('''INSERT INTO challenges VALUES (?,?,?,?,?,?,?)''', taskEntry)
+            number+=1
         
     conn.commit()
     conn.close()
@@ -69,14 +68,8 @@ def getChallengeByNumber(n):
     conn = sqlite3.connect("dailyProgrammer.db")
     c = conn.cursor()
     lines = c.execute('''SELECT number, difficulty, task, complete FROM challenges WHERE number=?''', (n,))
-    challenges = Challenges()
-    for line in lines:
-        challenges = addChallengeToClass(challenges, line)
-    
-    out = challenges.returnList()
-    os.system("clear")
-    for chall in out:
-        print(f"Task: {chall[0]} // Difficulty: {chall[1]} // Complete: {chall[3]} \n \n")
+    chall = lines.fetchone()
+    print(f"Task: {chall[0]} // Difficulty: {chall[1]} // Complete: {chall[3]} \n \n")
 
     print(chall[2])
     while True:
@@ -90,13 +83,11 @@ def getChallengeByNumber(n):
             print("Incorrect command. Try again.")
 
 
-    challenges.clear()
-
-def getChallengeByNumberAndDifficulty(n, diff):
+def getChallengeByDifficulty(diff):
     conn = sqlite3.connect("dailyProgrammer.db")
     c = conn.cursor()
-    current = c.execute('''SELECT number, difficulty, task, complete FROM challenges WHERE number=? AND difficulty=?''', (n, diff))
-    currentFetch = current.fetchone()
+    current = c.execute('''SELECT number, difficulty, task, complete FROM challenges WHERE difficulty=?''', (diff,))
+    currentFetch = current.fetchall()
     return(currentFetch[2])
 
 def addCurrentToDatabase(challenge):
@@ -124,46 +115,96 @@ def getCurrentFromDatabase():
     conn.close()
 
 
-def addChallengeToClass(challenges, line):
-    if line[1] == "easy":
-        challenges.easy = line
-    elif line[1] == "intermediate":
-        challenges.intermediate = line
-    elif line[1] == "hard":
-        challenges.hard = line
-    else:
-        challenges.other = line
+def dbToChallenge(line):
+    return Challenge(number=line[0], difficulty=line[1], task=line[2], title=line[3], url=line[4], complete=line[5], in_progress=line[6])
 
-    return challenges
 
 def getAllChallenges():
     conn = sqlite3.connect("dailyProgrammer.db")
     c = conn.cursor()
-    lines = c.execute('''SELECT number, difficulty FROM challenges LIMIT 1''')
-    challengeNumber = lines.fetchone()[0]
-    lines = c.execute('''SELECT number, difficulty FROM challenges''')
+    query = c.execute('''SELECT * FROM challenges''')
+    data = query.fetchall()
 
-    challenges = Challenges()
-    for line in lines:
-        if line[0] == challengeNumber:
-            challenges = addChallengeToClass(challenges, line)
+    col, row = os.get_terminal_size()
+    col_count = 0
+    row_count = 0
+
+    print("Num  Difficulty   Done  "*3)
+    for line in data:
+        if row <= row_count+3:
+            row_count = 0
+            browse = input("\n [b] - Prev // [n] - Next")
+            if browse == "n":
+                os.system("clear")
+                print("Num  Difficulty   Done  "*3)
+                continue
+            
+        #if line[0] == None and line[1] == None:
+        #    break
+        challenge = dbToChallenge(line)
+        if col > col_count+60:
+            print(f"{challenge.returnNumberEqualLength()}: {challenge.returnDifficultyEqualLength()}", end=" ")
+            col_count+=len(challenge.returnNumberEqualLength())+len(challenge.returnDifficultyEqualLength())+4
         else:
-            challenges.clear()
-            challengeNumber = line[0]
-            challenges = addChallengeToClass(challenges, line)
-    
+            print("\r")
+            print(f"{challenge.returnNumberEqualLength()}: {challenge.returnDifficultyEqualLength()}", end=" ")
+            col_count = 0
+            row_count+=1
+    print("\n")
+    conn.close()
+
+def browseAllChallenges():
+    conn = sqlite3.connect("dailyProgrammer.db")
+    c = conn.cursor()
+    query = c.execute('''SELECT * FROM challenges''')
+    data = query.fetchall()
+
+    col, row = os.get_terminal_size()
+    col_count = 0
+    row_count = 0
+    test = [x for x in data] #TODO be able to browse back/forward
+
+    print("Num  Difficulty   Done  "*3)
+    for line in data:
+        if row <= row_count+3:
+            row_count = 0
+            browse = input("\n [b] - Prev // [n] - Next")
+            if browse == "n":
+                os.system("clear")
+                print("Num  Difficulty   Done  "*3)
+                continue
+            
+        #if line[0] == None and line[1] == None:
+        #    break
+        challenge = dbToChallenge(line)
+        if col > col_count+60:
+            print(f"{challenge.returnNumberEqualLength()}: {challenge.returnDifficultyEqualLength()}", end=" ")
+            col_count+=len(challenge.returnNumberEqualLength())+len(challenge.returnDifficultyEqualLength())+4
+        else:
+            print("\r")
+            print(f"{challenge.returnNumberEqualLength()}: {challenge.returnDifficultyEqualLength()}", end=" ")
+            col_count = 0
+            row_count+=1
+    print("\n")
     conn.close()
 
 parser = argparse.ArgumentParser(description="Reddit dailyProgrammer client")
 parser.add_argument("integer", metavar='N', type=int, nargs='?', help="An integer for challenge selection")
 parser.add_argument("-c", "--challenge", help="Select challenge", dest="getNum", action="store_const", const=getChallengeByNumber)
 parser.add_argument("-p", "--in-progress", help="Show in-progress challenge", dest="getInProgress", action="store_const", const=getCurrentFromDatabase)
-#parser.add_argument("-s", "--setCurrent", help="Set current challenge", dest="action", action="store_const", const=setCurrentChallenge)
+parser.add_argument("-s", "--setCurrent", help="Show all challenges", dest="showAll", action="store_const", const=browseAllChallenges)
 args = parser.parse_args()
 #print(args)
+
+if not os.path.isfile("dailyProgrammer.db"):
+    print("Creating database...")
+    initialDataDump()
+    print("Complete")
 
 
 if args.getNum:
     args.getNum(args.integer)
 if args.getInProgress:
     args.getInProgress()
+if args.showAll:
+    args.showAll()
