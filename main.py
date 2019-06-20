@@ -19,10 +19,16 @@ class Challenge():
         self.in_progress = in_progress
         
     def returnDifficultyEqualLength(self):
-        return self.difficulty + " "*(24-(len(self.difficulty)))
+        return self.difficulty + " "*(20-(len(self.difficulty))) 
 
     def returnNumberEqualLength(self):
         return str(self.number) + " "*(3-len(str(self.number)))
+
+    def returnCompleteYesNo(self):
+        if self.complete == 0:
+            return u"\u2715" + " |"
+        else:
+            return u"\u2713" + " |"
 
 
 def initialDataDump():
@@ -159,34 +165,87 @@ def browseAllChallenges():
     query = c.execute('''SELECT * FROM challenges''')
     data = query.fetchall()
 
+
     col, row = os.get_terminal_size()
     col_count = 0
     row_count = 0
+    row_limit = 0
     test = [x for x in data] #TODO be able to browse back/forward
+    pageIndex = [0]
+    row = row-3
+    entry_limit = (int(col/30)*row)
 
-    print("Num  Difficulty   Done  "*3)
-    for line in data:
+
+    for i in range(0, len(test)):
         if row <= row_count+3:
+            pageIndex.append(i)
+            row_limit = 0
             row_count = 0
-            browse = input("\n [b] - Prev // [n] - Next")
-            if browse == "n":
-                os.system("clear")
-                print("Num  Difficulty   Done  "*3)
-                continue
-            
-        #if line[0] == None and line[1] == None:
-        #    break
-        challenge = dbToChallenge(line)
         if col > col_count+60:
-            print(f"{challenge.returnNumberEqualLength()}: {challenge.returnDifficultyEqualLength()}", end=" ")
+            challenge = dbToChallenge(test[i])
             col_count+=len(challenge.returnNumberEqualLength())+len(challenge.returnDifficultyEqualLength())+4
+            row_limit+=1
         else:
-            print("\r")
-            print(f"{challenge.returnNumberEqualLength()}: {challenge.returnDifficultyEqualLength()}", end=" ")
             col_count = 0
             row_count+=1
-    print("\n")
-    conn.close()
+
+    pageEntries = int(entry_limit/int(col/30))
+    pages = pageEntries*int(col/30)
+    maxPages = int((len(test)/pages))
+    page = 0
+    print(maxPages)
+    tooltip = ""
+    while True:
+        printScreen(test, page*entry_limit)
+        print(tooltip)
+        
+        output = input("[b] - prev // [n] - next  ")
+        
+        tooltip = ""
+        if output == "n":
+            if page >= maxPages:
+                tooltip = "// At last page //"
+            else:
+                page+=1
+        if output == "b":
+            if page-1 < 0:
+                tooltip = "// At first page //"
+            else:
+                page-=1
+
+    print(len(data))
+
+
+def printScreen(test, page):
+    col, row = os.get_terminal_size()
+    row = row-3
+    entry_limit = (int(col/30)*row)
+    
+    out = []
+    for i in range(entry_limit):
+        try:
+            challenge = dbToChallenge(test[i+page])
+        except IndexError:
+            continue
+        out.append(challenge)
+
+    pageEntries = int(entry_limit/int(col/30))
+
+    arrOut = []
+    for i in range(pageEntries):
+        for j in range(int(col/30)):
+            try:
+                arrOut.append((out[i+pageEntries*j].returnNumberEqualLength(), out[i+pageEntries*j].returnDifficultyEqualLength(), out[i+pageEntries*j].returnCompleteYesNo()))
+            except IndexError:
+                pass
+        for item in arrOut:
+            print(f" {item[0]} {item[1]} {item[2]}", end="")
+        arrOut = []
+        print("\r")
+    
+    print("\r")
+
+
 
 parser = argparse.ArgumentParser(description="Reddit dailyProgrammer client")
 parser.add_argument("integer", metavar='N', type=int, nargs='?', help="An integer for challenge selection")
