@@ -195,7 +195,7 @@ def browseAllChallenges():
     page = 0
     print(maxPages)
     tooltip = ""
-    while True:
+    while True: #TODO add quit/select challenge
         printScreen(test, page*entry_limit)
         print(tooltip)
         
@@ -213,7 +213,6 @@ def browseAllChallenges():
             else:
                 page-=1
 
-    print(len(data))
 
 
 def printScreen(test, page):
