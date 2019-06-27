@@ -70,32 +70,52 @@ def initialDataDump():
     conn.commit()
     conn.close()
 
+
 def getChallengeByNumber(n):
     conn = sqlite3.connect("dailyProgrammer.db")
     c = conn.cursor()
     lines = c.execute('''SELECT * FROM challenges WHERE number=?''', (n,))
     chall = lines.fetchone()
     challenge = dbToChallenge(chall)
-    print(f"Task: {challenge.task} // Difficulty: {challenge.difficulty} // Complete: {challenge.complete} \n \n")
-
-    print(challenge.task)
+    
+    tooltip = ""
     while True:
-        current = input("[s] - Set as the in-progress challenge // [q] - Quit \n")
-        if current=="s":
-            setInProgress(challenge)
+        print(f"Task: {challenge.task} // Difficulty: {challenge.difficulty} // Complete: {challenge.complete} \n \n")
+        print(challenge.task + "\n")
+        print(tooltip)
+        current = input("[s] - Set in-progress // [c] - Set Complete // [i] - Set Incomplete // [b] - Return to browse // [q] - Quit \n")
+        if current == "s":
+            tooltip = setInProgress(challenge)
+        elif current == "b":
+            browseAllChallenges()
+        elif current == "c":
+            tooltip = setComplete(challenge)
+        elif current == "i":
+            tooltip = setIncomplete(challenge)
         elif current == "q":
             os.system("clear")
             exit(1)
         else:
-            print("Incorrect command. Try again.")
+            tooltip = "Incorrect command. Try again."
 
 
 def setInProgress(challenge):
     conn = sqlite3.connect("dailyProgrammer.db")
     c = conn.cursor()
-    c.execute('''UPDATE challenges SET in_progress=? WHERE number=?''',(1, challenge.number))
-    conn.commit()
-    conn.close()
+    query = c.execute('''SELECT * FROM challenges WHERE number=?''', (challenge.number,))
+    data = query.fetchone()
+    challenge = dbToChallenge(data)
+    if challenge.complete == 1:
+        return "Challenge already set as complete. Set as incomplete to set in-progress."
+    if query.fetchone():
+        conn.commit()
+        conn.close()    
+        return "Challenge already in-progress"
+    else:
+        c.execute('''UPDATE challenges SET in_progress=? WHERE number=?''',(1, challenge.number))
+        conn.commit()
+        conn.close() 
+        return "Challenge set to in-progress"
 
 
 def dbToChallenge(line):
@@ -136,6 +156,7 @@ def getAllChallenges():
     print("\n")
     conn.close()
 
+
 def browseAllChallenges():
     conn = sqlite3.connect("dailyProgrammer.db")
     c = conn.cursor()
@@ -172,11 +193,11 @@ def browseAllChallenges():
     page = 0
     print(maxPages)
     tooltip = ""
-    while True: #TODO add quit/select challenge
+    while True: 
         printScreen(test, page*entry_limit)
         print(tooltip)
         
-        output = input("[b] - prev // [n] - next // [c (num)] - select challenge \n")
+        output = input("[b] - prev // [n] - next // [(num)] - select challenge // [q] - Quit \n")
         
         tooltip = ""
         if output == "n":
@@ -189,10 +210,10 @@ def browseAllChallenges():
                 tooltip = "// At first page //"
             else:
                 page-=1
-        if output[0] == "c":
-            num = output[1:].strip()
-            getChallengeByNumber(num)
-
+        if output.isdigit():
+            getChallengeByNumber(output)
+        if output == "q":
+            exit(1)
 
 
 def printScreen(test, page):
@@ -229,20 +250,20 @@ def getInProgress():
     conn = sqlite3.connect("dailyProgrammer.db")
     c = conn.cursor()
     query = c.execute('''SELECT number, difficulty FROM challenges WHERE in_progress=1''')
-    os.system("clear")
+    #os.system("clear")
     for item in query:
         print(f"{item[0]}: {item[1]}")
 
     while True:
-        options = input("[b] - back // [q] - quit // [r (num)] - remove challenge \n")
+        options = input("[b] - back // [q] - quit // [r (num)] - remove challenge // [(num)] - select challenge \n")
         os.system("clear")
         if options[0] == "r":
             num = options[1:].strip()
             setNotInProgress(num)
         if options == "q":
             exit(1)
-
-
+        if options.isdigit():
+            getChallengeByNumber(options)
 
 
 def setNotInProgress(num):
@@ -253,11 +274,41 @@ def setNotInProgress(num):
     conn.close()
 
 
+def setComplete(challenge):
+    conn = sqlite3.connect("dailyProgrammer.db")
+    c = conn.cursor()
+    query = c.execute('''SELECT * FROM challenges WHERE number=? AND complete=?''', (challenge.number, 1))
+    if query.fetchone():
+        conn.commit()
+        conn.close()    
+        return "Challenge already set complete."
+    else:
+        c.execute('''UPDATE challenges SET complete=? WHERE number=?''', (1, challenge.number))
+        conn.commit()
+        conn.close()
+        return "Challenge set complete."
+
+
+def setIncomplete(challenge):
+    conn = sqlite3.connect("dailyProgrammer.db")
+    c = conn.cursor()
+    query = c.execute('''SELECT * FROM challenges WHERE number=? AND complete=?''', (challenge.number, 0))
+    if query.fetchone():
+        conn.commit()
+        conn.close()    
+        return "Challenge already incomplete."
+    else:
+        c.execute('''UPDATE challenges SET complete=? WHERE number=?''', (0, challenge.number))
+        conn.commit()
+        conn.close()
+        return "Challenge set incomplete."
+
+
 parser = argparse.ArgumentParser(description="Reddit dailyProgrammer client")
 parser.add_argument("integer", metavar='N', type=int, nargs='?', help="An integer for challenge selection")
 parser.add_argument("-c", "--challenge", help="Select challenge", dest="getNum", action="store_const", const=getChallengeByNumber)
 parser.add_argument("-p", "--in-progress", help="Show in-progress challenge", dest="getInProgress", action="store_const", const=getInProgress)
-parser.add_argument("-b", "--setCurrent", help="Browse challenges", dest="showAll", action="store_const", const=browseAllChallenges)
+parser.add_argument("-b", "--browse", help="Browse challenges", dest="showAll", action="store_const", const=browseAllChallenges)
 args = parser.parse_args()
 #print(args)
 
